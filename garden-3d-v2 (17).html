@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backyard Garden 3D</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#87ceeb;font-family:system-ui,Segoe UI,Arial,sans-serif;user-select:none}
+  canvas{display:block}
+  #sunBox{position:fixed;top:12px;left:12px;background:rgba(40,30,0,.65);color:#ffe45c;padding:8px 16px;border-radius:12px;font-size:26px;font-weight:700;border:2px solid #ffd21f}
+  #hpBox{position:fixed;top:68px;left:12px;width:150px;height:14px;background:rgba(0,0,0,.55);border-radius:8px;overflow:hidden;border:2px solid #fff3}
+  #hpBar{height:100%;width:100%;background:#e24b4b;transition:width .15s}
+  #status{position:fixed;top:92px;left:12px;color:#fff;background:rgba(0,0,0,.5);padding:5px 10px;border-radius:8px;font-size:13px;max-width:230px}
+  #help{position:fixed;top:12px;right:12px;background:rgba(0,0,0,.5);color:#fff;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;max-width:270px}
+  #bottom{position:fixed;left:0;right:0;bottom:10px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+  .row{display:flex;gap:8px;align-items:center;pointer-events:auto;background:rgba(0,0,0,.55);padding:8px 10px;border-radius:14px}
+  .label{color:#fff;font-size:12px;opacity:.8;margin-right:4px;width:70px}
+  .card{width:92px;height:76px;border-radius:10px;background:#2d5a27;border:3px solid #6fbf5f;color:#fff;text-align:center;cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:13px;position:relative}
+  .card b{font-size:14px}
+  .card .cost{color:#ffe45c;font-weight:700}
+  .card.no{filter:grayscale(.8) brightness(.7);cursor:not-allowed}
+  .card:not(.no):hover{transform:translateY(-3px)}
+  .slot{width:70px;height:70px;border-radius:10px;background:rgba(255,255,255,.12);border:3px solid #555;color:#fff;text-align:center;cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:12px;position:relative}
+  .slot.sel{border-color:#ffe45c;background:rgba(255,228,92,.25)}
+  .slot .n{position:absolute;top:2px;left:5px;font-size:11px;opacity:.7}
+  .slot .q{position:absolute;bottom:2px;right:6px;font-weight:700;font-size:14px}
+  #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,.6);padding:6px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none}
+  #status{white-space:pre-line}
+  #players{position:fixed;top:150px;left:12px;color:#fff;background:rgba(0,0,0,.45);padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.6;display:none;max-width:230px}
+  #players .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  #join{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(10,30,10,.72);display:flex;align-items:center;justify-content:center;z-index:50}
+  #join .box{background:#fff;border-radius:16px;padding:22px 26px;width:320px;box-shadow:0 10px 40px #0006;color:#223}
+  #join h2{margin:0 0 6px;font-size:22px}
+  #join p{margin:0 0 12px;font-size:13px;opacity:.8}
+  #join input{display:block;width:100%;box-sizing:border-box;margin:6px 0;padding:9px 10px;border:2px solid #cfd8cf;border-radius:8px;font-size:15px}
+  #join .btns{display:flex;gap:8px;margin-top:8px}
+  #join button{flex:1;padding:10px;border:0;border-radius:8px;background:#2e8b2e;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+  #join button.alt{background:#7a8a7a}
+  #join .tiny{font-size:11px;opacity:.65;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="sunBox">☀ <span id="sunCount">50</span></div>
+<div id="hpBox"><div id="hpBar"></div></div>
+<div id="status"></div>
+<div id="help"><b>WASD</b> move · <b>Shift</b> run<br><b>Right-drag</b> or <b>Q/E</b> rotate camera · <b>Wheel</b> zoom<br>Walk into suns (or click them) to collect<br>Buy plants → pick from inventory (<b>1-6</b>) → <b>click grass</b> to place · <b>Esc</b> deselect · <b>X</b> + click removes a plant<br>Zombies wake up once you plant <b>2 Seedshooters</b>.<br>Multiplayer: plants and zombies are shared; suns are yours.</div>
+<div id="bottom">
+  <div class="row" id="inv"><span class="label">Inventory</span></div>
+  <div class="row" id="shop"><span class="label">Shop</span></div>
+</div>
+<div id="players"></div>
+<div id="join"><div class="box">
+  <h2>🌻 Backyard Garden</h2>
+  <p>Plant together, survive together. Everyone in the same room shares the lawn, the plants and the zombies.</p>
+  <input id="jName" maxlength="16" placeholder="Your name" autocomplete="off">
+  <input id="jRoom" maxlength="24" placeholder="Room code (e.g. main)" autocomplete="off">
+  <div class="btns"><button id="jGo">Join room</button><button id="jSolo" class="alt">Play solo</button></div>
+  <div class="tiny">Share the page link plus <b>?room=yourcode</b> with friends.</div>
+</div></div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ---------- basics / UI helpers (defined first) ----------
+const sunEl = document.getElementById('sunCount');
+const toastEl = document.getElementById('toast');
+const hpBar = document.getElementById('hpBar');
+const statusEl = document.getElementById('status');
+function toast(t){ toastEl.textContent=t; toastEl.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>toastEl.style.opacity=0,1800); }
+function turn(cur,target,k){ const d=Math.atan2(Math.sin(target-cur),Math.cos(target-cur)); return cur+d*Math.min(1,k); }
+
+// ---------- scene ----------
+const WORLD = 70;                      // half-size of the lawn (no fences, just a big yard)
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd8f5);
+scene.fog = new THREE.Fog(0x9fd8f5, 60, 160);
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 400);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.outputEncoding = THREE.sRGBEncoding;   // GLB textures look dark/washed without this
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6b8f4a, 0.75));
+const sunLight = new THREE.DirectionalLight(0xfff2cc, 0.9);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+Object.assign(sunLight.shadow.camera, {left:-30, right:30, top:30, bottom:-30, near:1, far:90});
+scene.add(sunLight); scene.add(sunLight.target);
+
+// striped grass everywhere
+const grassTex = (()=>{ const c=document.createElement('canvas'); c.width=128; c.height=16; const x=c.getContext('2d');
+  x.fillStyle='#5bb847'; x.fillRect(0,0,64,16); x.fillStyle='#4fa83d'; x.fillRect(64,0,64,16);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(WORLD*2/4, 1); t.magFilter=THREE.NearestFilter; return t; })();
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD*2, WORLD*2), new THREE.MeshLambertMaterial({map:grassTex}));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+const outer = new THREE.Mesh(new THREE.PlaneGeometry(800,800), new THREE.MeshLambertMaterial({color:0x4a9a3a}));
+outer.rotation.x=-Math.PI/2; outer.position.y=-0.05; scene.add(outer);
+
+// scenery trees far away (no collisions, just a horizon)
+function tree(x,z,s){ const g=new THREE.Group();
+  const t=new THREE.Mesh(new THREE.CylinderGeometry(.4*s,.55*s,3*s,8),new THREE.MeshLambertMaterial({color:0x6b4a2b})); t.position.y=1.5*s; g.add(t);
+  const l=new THREE.Mesh(new THREE.IcosahedronGeometry(2.2*s,1),new THREE.MeshLambertMaterial({color:0x2f7d32})); l.position.y=4.2*s; g.add(l);
+  g.position.set(x,0,z); g.traverse(o=>{if(o.isMesh)o.castShadow=false}); scene.add(g); }
+for (let i=0;i<60;i++){ const a=i/60*Math.PI*2; const r=WORLD+10+((i*13)%7); tree(Math.cos(a)*r, Math.sin(a)*r, 1.3+((i*37)%5)/6); }
+
+// ---------- player ----------
+const player = new THREE.Group();
+const mk = (g,c)=>new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:c}));
+const body = mk(new THREE.CylinderGeometry(.38,.42,1.2,12),0x3b82f6); body.position.y=.9; body.castShadow=true; player.add(body);
+const head = mk(new THREE.SphereGeometry(.33,16,12),0xffd7b0); head.position.y=1.65; head.castShadow=true; player.add(head);
+const hat = mk(new THREE.ConeGeometry(.4,.35,12),0xe8c547); hat.position.y=2.0; player.add(hat);
+const brim = mk(new THREE.CylinderGeometry(.55,.55,.04,16),0xe8c547); brim.position.y=1.85; player.add(brim);
+const nose = mk(new THREE.BoxGeometry(.12,.1,.2),0xe5b98a); nose.position.set(0,1.62,.33); player.add(nose);
+const legs=[]; for(const sx of [-1,1]){ const l=mk(new THREE.BoxGeometry(.22,.5,.25),0x1f3a6b); l.position.set(sx*.18,.25,0); l.castShadow=true; player.add(l); legs.push(l); }
+player.position.set(0,0,0);
+scene.add(player);
+let playerHp=100, sinceHit=99;
+
+// ---------- plant types (simple built-in versions used as fallback) ----------
+const M = c => new THREE.MeshLambertMaterial({color:c});
+function stem(h=1){ const s=new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,h,8),M(0x2e8b2e)); s.position.y=h/2; return s; }
+function leaf(x,y,rot){ const l=new THREE.Mesh(new THREE.SphereGeometry(.28,10,8),M(0x3da23d)); l.scale.set(1.5,.25,.8); l.position.set(x,y,0); l.rotation.z=rot; return l; }
+
+const PLANTS = {
+  sunpetal: { name:'Sunpetal', cost:50, hp:80, desc:'makes suns', build(){
+    const g=new THREE.Group(); g.add(stem(1.1)); g.add(leaf(.3,.4,.4)); g.add(leaf(-.3,.5,-.4));
+    const f=new THREE.Group(); f.position.y=1.25;
+    for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; const p=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),M(0xffd21f)); p.scale.set(1.2,.35,.6); p.position.set(Math.cos(a)*.45,0,Math.sin(a)*.45); p.rotation.y=-a; f.add(p); }
+    const c=new THREE.Mesh(new THREE.SphereGeometry(.3,14,10),M(0x7a4b1e)); c.scale.y=.6; f.add(c);
+    f.rotation.x=Math.PI/2*0.25; g.add(f); g.userData.flower=f; return g; } },
+  seedshooter: { name:'Seedshooter', cost:100, hp:100, desc:'shoots zombies', build(){
+    const g=new THREE.Group(); g.add(stem(.9)); g.add(leaf(-.3,.3,.5));
+    const h=new THREE.Group(); h.position.y=1.15;
+    h.add(new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),M(0x66cc44)));
+    const n=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.35,12),M(0x4ea836)); n.rotation.x=Math.PI/2; n.position.z=.5; h.add(n);
+    const hole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.05,10),M(0x1d3a12)); hole.rotation.x=Math.PI/2; hole.position.z=.7; h.add(hole);
+    for(const sx of[-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),M(0x111111)); e.position.set(sx*.18,.15,.36); h.add(e);}
+    g.add(h); return g; } },
+  barkwall: { name:'Barkwall', cost:75, hp:400, desc:'tough blocker', build(){
+    const g=new THREE.Group();
+    const b=new THREE.Mesh(new THREE.CylinderGeometry(.55,.62,1.5,16),M(0x8b5a2b)); b.position.y=.75; g.add(b);
+    for(const y of[.35,.8,1.15]){ const r=new THREE.Mesh(new THREE.TorusGeometry(.6,.04,6,20),M(0x5e3a18)); r.rotation.x=Math.PI/2; r.position.y=y; g.add(r);}
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.05,16),M(0xd9b27a)); top.position.y=1.5; g.add(top);
+    for(const sx of[-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),M(0x111111)); e.position.set(sx*.2,1.0,.52); g.add(e);}
+    return g; } },
+  thornberry: { name:'Thornberry', cost:125, hp:150, desc:'squashes a nearby zombie, then is gone', build(){
+    const g=new THREE.Group();
+    const b=new THREE.Mesh(new THREE.SphereGeometry(.6,16,12),M(0xc2185b)); b.position.y=.65; g.add(b);
+    for(let i=0;i<26;i++){ const u=Math.random()*2-1, a=Math.random()*Math.PI*2, r=Math.sqrt(1-u*u);
+      const dir=new THREE.Vector3(r*Math.cos(a),Math.abs(u)*0.8+.2,r*Math.sin(a)).normalize();
+      const s=new THREE.Mesh(new THREE.ConeGeometry(.06,.3,6),M(0xf5e6c8));
+      s.position.copy(dir).multiplyScalar(.68).add(new THREE.Vector3(0,.65,0));
+      s.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir); g.add(s); }
+    return g; } },
+  flarepea: { name:'Flarepea', cost:175, hp:100, desc:'hot fire shots', build(){
+    const g=new THREE.Group(); g.add(stem(.9)); g.add(leaf(-.3,.3,.5));
+    const h=new THREE.Group(); h.position.y=1.15;
+    h.add(new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),M(0xe8602c)));
+    const n=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.35,12),M(0xc2410c)); n.rotation.x=Math.PI/2; n.position.z=.5; h.add(n);
+    const fl=new THREE.Mesh(new THREE.ConeGeometry(.2,.5,8),M(0xffb703)); fl.position.y=.55; h.add(fl);
+    for(const sx of[-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),M(0x111111)); e.position.set(sx*.18,.15,.36); h.add(e);}
+    g.add(h); return g; } },
+  punchchoy: { name:'Punchchoy', cost:150, hp:160, desc:'melee puncher', build(){
+    const g=new THREE.Group(); g.add(stem(.7));
+    for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; const l=new THREE.Mesh(new THREE.SphereGeometry(.4,10,8),M(0x4f9d4a)); l.scale.set(1,.3,1.6);
+      l.position.set(Math.cos(a)*.45,.9,Math.sin(a)*.45); l.rotation.y=-a+Math.PI/2; l.rotation.x=-.4; g.add(l); }
+    const h=new THREE.Mesh(new THREE.SphereGeometry(.32,12,10),M(0x7bc96f)); h.position.y=1.0; g.add(h);
+    return g; } },
+  twinshooter: { name:'Twinshooter', cost:200, hp:110, desc:'fires 2 seeds in a row', build(){
+    const g=new THREE.Group(); g.add(stem(.9)); g.add(leaf(-.3,.3,.5));
+    const h=new THREE.Group(); h.position.y=1.15;
+    h.add(new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),M(0x4fb83a)));
+    for(const sy of[-.12,.12]){ const n=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.35,12),M(0x3c8f2c)); n.rotation.x=Math.PI/2; n.position.set(0,sy,.5); h.add(n); }
+    for(const sx of[-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),M(0x111111)); e.position.set(sx*.18,.2,.36); h.add(e);}
+    g.add(h); return g; } },
+  berryblast: { name:'Berryblast', cost:150, hp:60, desc:'explodes near zombies, then is gone', build(){
+    const g=new THREE.Group();
+    for(const sx of[-1,1]){ const b=new THREE.Mesh(new THREE.SphereGeometry(.42,14,12),M(0xd7263d)); b.position.set(sx*.4,.45,0); g.add(b); }
+    const st=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.8,6),M(0x2e8b2e)); st.position.set(0,1.0,0); g.add(st);
+    return g; } },
+  chompvine: { name:'Chompvine', cost:150, hp:220, desc:'swallows a zombie, then chews for a while', build(){
+    const g=new THREE.Group(); g.add(stem(.8));
+    const h=new THREE.Mesh(new THREE.SphereGeometry(.6,16,12),M(0x7b3fb0)); h.position.y=1.2; h.scale.set(1,.9,1.1); g.add(h);
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.4,12,8),M(0xfff0f0)); m.position.set(0,1.05,.45); m.scale.set(1.2,.35,.8); g.add(m);
+    return g; } },
+};
+const PLANT_KEYS = Object.keys(PLANTS);
+const SHOOTERS = {
+  seedshooter: { cd:3, dmg:20, range:20, color:0x7ddc4a, speed:16 },
+  flarepea:    { cd:3, dmg:34, range:23, color:0xff8a1f, speed:19 },
+  twinshooter: { cd:3, dmg:20, range:20, color:0x58d03a, speed:16, burst:2 },
+};
+
+// ---------- zombie kinds ----------
+const ZKINDS = {
+  walker:   { file:'zombie_-_pvz_garden_warfare.glb',               height:2.0, hp:100, speed:1.1, dmg:18, color:0x7f9a6a },
+  cone:     { file:'conehead_zombie_-_pvz_garden_warfare.glb',      height:2.3, hp:220, speed:1.1, dmg:18, color:0x7f9a6a },
+  bucket:   { file:'buckethead_zombie_-_pvz_garden_warfare.glb',    height:2.3, hp:420, speed:1.0, dmg:18, color:0x7f9a6a },
+  football: { file:'football_zombie_-_pvz_garden_warfare.glb',      height:2.2, hp:320, speed:2.2, dmg:30, color:0x9a5a5a },
+  dancer:   { file:'backup_dancer_-_pvz_garden_warfare.glb',        height:2.1, hp:140, speed:1.9, dmg:14, color:0xb07ac8 },
+  newspaper:{ file:'newspaper_zombie_-_pvz_garden_warfare.glb',     height:2.1, hp:170, speed:1.0, dmg:18, color:0x8a8f7a },
+  yeti:     { file:'zombie_yeti_-_pvz_garden_warfare.glb',          height:2.6, hp:700, speed:1.6, dmg:40, color:0xdfe9f0 },
+  gargantuar:{file:'gargantuar.glb',                                height:3.8, hp:1600,speed:0.7, dmg:90, color:0x6f8a5c, reach:1.9 },
+};
+function fallbackZombie(kind){
+  const g=new THREE.Group(), c=ZKINDS[kind].color;
+  const b=mk(new THREE.BoxGeometry(.7,1.0,.4),0x555e6e); b.position.y=1.0; g.add(b);
+  const h=mk(new THREE.SphereGeometry(.32,12,10),c); h.position.y=1.8; g.add(h);
+  for(const sx of[-1,1]){ const a=mk(new THREE.BoxGeometry(.18,.18,.8),c); a.position.set(sx*.45,1.3,.4); a.name='arm'; g.add(a);
+    const l=mk(new THREE.BoxGeometry(.25,.55,.25),0x3a3f4a); l.position.set(sx*.18,.28,0); l.name='leg'; g.add(l); }
+  if(kind==='cone'){ const k=mk(new THREE.ConeGeometry(.3,.6,10),0xe67e22); k.position.y=2.3; g.add(k); }
+  if(kind==='bucket'){ const k=mk(new THREE.CylinderGeometry(.34,.28,.5,12),0x9aa3ad); k.position.y=2.2; g.add(k); }
+  if(kind==='football'){ const k=mk(new THREE.SphereGeometry(.38,12,10),0xb23a3a); k.scale.y=.8; k.position.y=1.95; g.add(k); }
+  return g;
+}
+
+// ---------- load your GLB models from the repo ----------
+const REPO = 'https://raw.githubusercontent.com/Freerobuxplz/gardenwarfare/main/';
+const MODEL_FILES = {
+  sunpetal:    { file:'plants_vs._zombies_garden_warfare_2_sunflower.glb', height:1.9, yaw:0 },
+  seedshooter: { file:'peashooter_-_plants_vs_zombies_starting_contest.glb', height:1.7, yaw:0 },
+  barkwall:    { file:'plants_vs_zombies_-_walnut.glb', height:1.5, yaw:0 },
+  thornberry:  { file:'squash.glb', height:1.6, yaw:0 },
+  flarepea:    { file:'fire_pea_-_pvz_garden_warfare.glb', height:1.8, yaw:0 },
+  punchchoy:   { file:'pvz_garden_warfare_1_-_bonk_choy.glb', height:1.7, yaw:0 },
+  twinshooter: { file:'repeater_-_pvz_garden_warfare.glb', height:1.7, yaw:0 },
+  berryblast:  { file:'cherry_bomb_-_pvz_garden_warfare.glb', height:1.0, yaw:0 },
+  chompvine:   { file:'chomper_-_pvz_garden_warfare_2.glb', height:2.0, yaw:0 },
+};
+const PLAYER_MODEL = { file:'crazy_dave_-_pvz_garden_warfare_2.glb', height:1.9, yaw:0 };
+const zombieTpl = {};
+let daveTpl = null;                                    // Crazy Dave template (player model)
+const _Rx=new THREE.Quaternion(), _Rz=new THREE.Quaternion(), _R=new THREE.Quaternion(), _AX=new THREE.Vector3(1,0,0), _AZ=new THREE.Vector3(0,0,1);
+// Dave's rig has no animation clips, so we pose his arm/leg bones ourselves (in model space, so bone axes don't matter)
+function makeDave(){
+  const g=new THREE.Group(); g.add(THREE.SkeletonUtils.clone(daveTpl)); g.updateMatrixWorld(true);
+  const limbs=[];
+  g.traverse(o=>{
+    if(!o.isBone||!o.parent) return;
+    const n=o.name||''; let kind=null;
+    if(/UpLeg/i.test(n)) kind='leg'; else if(/^(Left|Right)Arm_/i.test(n)) kind='arm'; else return;
+    const pw=new THREE.Quaternion(), bw=new THREE.Quaternion(); o.parent.getWorldQuaternion(pw); o.getWorldQuaternion(bw);
+    limbs.push({bone:o,kind,side:/^Left/i.test(n)?1:-1,pwInv:pw.invert(),bw});
+  });
+  g.userData.dave=limbs; poseDave(g,0,0); return g;
+}
+function poseDave(g,phase,amt){
+  const limbs=g.userData.dave; if(!limbs) return;
+  const sw=Math.sin(phase)*amt;
+  for(const L of limbs){
+    if(L.kind==='leg'){ _R.setFromAxisAngle(_AX,L.side*sw*0.7); }
+    else { _Rx.setFromAxisAngle(_AX,-L.side*sw*0.5); _Rz.setFromAxisAngle(_AZ,-L.side*0.65); _R.copy(_Rx).multiply(_Rz); }   // arms: lowered from the A-pose, swing opposite the legs
+    _R.multiply(L.bw); L.bone.quaternion.copy(L.pwInv).multiply(_R);
+  }
+}
+let playerDave=null;
+function useDaveForPlayer(){
+  if(!daveTpl) return;
+  if(playerDave) player.remove(playerDave);
+  for(const o of [body,head,hat,brim,nose,...legs]) o.visible=false;   // hide the blocky stand-in
+  playerDave=makeDave(); playerDave.traverse(o=>{ if(o.isMesh||o.isSkinnedMesh){ o.castShadow=true; o.frustumCulled=false; } });
+  player.add(playerDave);
+}
+// ---- animation helpers ----
+const pickIdle = clips => clips.find(c=>/idle|stand|wait|breath/i.test(c.name)) || clips[0];
+function measureBox(model,clips){
+  // pose the model on its first idle frame so skinned meshes are measured as they will look
+  let mixer=null;
+  if(clips&&clips.length){ mixer=new THREE.AnimationMixer(model); mixer.clipAction(pickIdle(clips)).play(); mixer.update(0); }
+  model.updateMatrixWorld(true);
+  const box=new THREE.Box3(), v=new THREE.Vector3();
+  model.traverse(o=>{
+    if(!o.visible) return;
+    if(o.isSkinnedMesh){
+      o.skeleton.update(); const pos=o.geometry.attributes.position;
+      for(let i=0;i<pos.count;i++){ v.fromBufferAttribute(pos,i); o.boneTransform(i,v); v.applyMatrix4(o.matrixWorld); box.expandByPoint(v); }
+    } else if(o.isMesh){
+      o.geometry.computeBoundingBox(); const b=o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); box.union(b);
+    }
+  });
+  if(mixer){ mixer.stopAllAction(); mixer.uncacheRoot(model); }
+  return box;
+}
+function normalizeModel(gltf,height,yaw){
+  const model=THREE.SkeletonUtils.clone(gltf.scene);   // fresh copy so we can re-tune later
+  const clips=gltf.animations||[];
+  const junk=[];
+  model.traverse(o=>{
+    if(o.isLight||o.isCamera) junk.push(o);
+    if(o.isMesh||o.isSkinnedMesh){
+      if(/shadow|ground|floor|plane_|circle/i.test(o.name)) o.visible=false;   // stray helper meshes
+      const fix=m=>{ if(!m) return m;
+        m.side=THREE.DoubleSide;
+        if(m.map && m.transparent){ m.alphaTest=0.4; m.transparent=false; m.depthWrite=true; }
+        if(m.metalness!==undefined) m.metalness=Math.min(m.metalness,0.25);
+        if(m.roughness!==undefined) m.roughness=Math.max(m.roughness,0.5);
+        m.needsUpdate=true; return m; };
+      o.material=Array.isArray(o.material)?o.material.map(fix):fix(o.material);
+    }
+  });
+  junk.forEach(o=>o.parent&&o.parent.remove(o));
+  const box=measureBox(model,clips);
+  const size=box.getSize(new THREE.Vector3());
+  const s=height/Math.max(size.y,0.0001);
+  model.scale.multiplyScalar(s);
+  model.updateMatrixWorld(true);
+  const c=box.getCenter(new THREE.Vector3()).multiplyScalar(s);
+  model.position.x-=c.x; model.position.z-=c.z; model.position.y-=box.min.y*s;
+  const wrap=new THREE.Group(); wrap.add(model); wrap.rotation.y=yaw;
+  const holder=new THREE.Group(); holder.add(wrap);
+  return {holder,clips};
+}
+// give an instance its own animation mixer: idle loops, attack plays once on demand
+function setupAnim(g,clips,kind){
+  if(!clips||!clips.length) return;
+  const mixer=new THREE.AnimationMixer(g); g.userData.mixer=mixer;
+  const find=rx=>clips.find(c=>rx.test(c.name));
+  const base = kind==='zombie' ? (find(/walk|run|shamble|move|lurch/i)||pickIdle(clips)) : pickIdle(clips);
+  const baseA=mixer.clipAction(base); baseA.play(); g.userData.baseA=baseA;
+  const atk=find(/attack|punch|bonk|smack|slap|hit|chomp|bite|shoot|fire|spit/i);
+  if(atk && atk!==base){
+    const aA=mixer.clipAction(atk); aA.setLoop(THREE.LoopOnce,1); aA.clampWhenFinished=false; g.userData.attackA=aA;
+    mixer.addEventListener('finished',e=>{ if(e.action===aA){ aA.fadeOut(.12); baseA.reset().fadeIn(.12).play(); } });
+  }
+  mixer.update(Math.random()*base.duration);   // desync neighbours
+}
+function playAttack(g){
+  const u=g.userData; if(!u||!u.attackA||!u.baseA) return;
+  if(u.attackA.isRunning()) return;
+  u.baseA.fadeOut(.08); u.attackA.reset().fadeIn(.08).play();
+}
+const API = 'https://api.github.com/repos/Freerobuxplz/gardenwarfare/contents';
+const JSD = 'https://cdn.jsdelivr.net/gh/Freerobuxplz/gardenwarfare@main/';
+// regexes used to find each model in the repo listing even if the exact file name differs
+const PLANT_RX = { sunpetal:/sunflower/i, seedshooter:/^peashooter/i, barkwall:/walnut/i, thornberry:/squash/i, flarepea:/fire.?pea/i, punchchoy:/bonk|choy/i, twinshooter:/repeater/i, berryblast:/cherry/i, chompvine:/chomper/i };
+const ZOMBIE_RX = { walker:/^zombie_-_pvz/i, cone:/conehead/i, bucket:/buckethead/i, football:/football/i, dancer:/dancer/i, newspaper:/newspaper/i, yeti:/yeti/i, gargantuar:/gargantuar/i };
+const modelLog = {};
+const rawModels = {};     // label -> {gltf,cfg,apply} kept so models can be re-tuned live
+const zombieClips = {};
+// swap already-placed plants of this type over to the freshly loaded/tuned model
+function refreshPlaced(key){
+  for(const p of placed){
+    if(p.key!==key) continue;
+    const old=p.mesh, m=PLANTS[key].build();
+    m.position.copy(old.position); m.rotation.copy(old.rotation); m.scale.copy(old.scale);
+    m.traverse(o=>{ if(o.isMesh||o.isSkinnedMesh){ o.castShadow=true; o.frustumCulled=false; } });
+    scene.remove(old); scene.add(m); p.mesh=m;
+  }
+}
+function refreshTune(){
+  const sel=document.getElementById('tuneSel'); if(!sel) return;
+  const keys=Object.keys(rawModels);
+  if(sel.options.length!==keys.length){ const cur=sel.value; sel.innerHTML=''; for(const k of keys){ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); } if(cur&&keys.includes(cur)) sel.value=cur; fillTune(); }
+}
+function fillTune(){
+  const r=rawModels[document.getElementById('tuneSel').value]; if(!r) return;
+  document.getElementById('tuneYaw').value=Math.round((r.cfg.yaw||0)*180/Math.PI);
+  document.getElementById('tuneH').value=r.cfg.height;
+}
+function showModelLog(){
+  refreshTune();
+  const el=document.getElementById('adModels'); if(!el) return;
+  el.textContent=Object.entries(modelLog).map(([k,v])=>k+': '+v).join('\n');
+}
+function loadGLTF(loader,urls){
+  let p=Promise.reject('no urls');
+  for(const u of urls) p=p.catch(()=>new Promise((res,rej)=>loader.load(u,res,undefined,e=>rej((e&&e.message)?e.message:('could not fetch '+u)))));
+  return p;
+}
+async function loadModels(){
+  if (!THREE.GLTFLoader || !THREE.SkeletonUtils) { toast('Model loader unavailable, using simple shapes'); modelLog.all='GLTFLoader script blocked'; showModelLog(); return; }
+  const loader=new THREE.GLTFLoader();
+  try{ if(THREE.DRACOLoader){ const d=new THREE.DRACOLoader(); d.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/'); loader.setDRACOLoader(d); } }catch(e){ console.warn(e); }
+  try{ if(window.MeshoptDecoder) loader.setMeshoptDecoder(window.MeshoptDecoder); }catch(e){ console.warn(e); }
+  toast('Loading models...');
+  // ask GitHub what files really exist
+  let listing=[];
+  try{ const r=await fetch(API); const j=await r.json(); if(Array.isArray(j)) listing=j.filter(f=>/\.glb$/i.test(f.name)); }catch(e){ console.warn('repo listing failed',e); }
+  const jobs=[];
+  const add=(label,cfg,rx,apply)=>{
+    modelLog[label]='loading...';
+    const found=listing.find(f=>rx.test(f.name));
+    const urls=[];
+    if(found && found.download_url) urls.push(found.download_url);
+    urls.push(REPO+encodeURIComponent(cfg.file));
+    urls.push(JSD+encodeURIComponent(found?found.name:cfg.file));
+    jobs.push(loadGLTF(loader,[...new Set(urls)]).then(gltf=>{
+      rawModels[label]={gltf,cfg,apply};
+      const n=normalizeModel(gltf,cfg.height,cfg.yaw||0); apply(n.holder,n.clips);
+      let extra='';
+      if(label.startsWith('zombie')){ const li=findLimbs(THREE.SkeletonUtils.clone(n.holder)); extra=' | legs '+li.legs.length+', arms '+li.arms.length; }
+      modelLog[label]='ok'+(n.clips.length?(' ['+n.clips.length+' anim: '+n.clips.map(c=>c.name).join(', ')+']'):' [no anim]')+extra; showModelLog();
+    }).catch(err=>{ modelLog[label]='FAILED ('+(found?found.name:cfg.file)+'): '+err; console.warn('Model failed',label,err); showModelLog(); }));
+  };
+  for(const [key,cfg] of Object.entries(MODEL_FILES)) add('plant '+key,cfg,PLANT_RX[key],(holder,clips)=>{
+    PLANTS[key].build=()=>{ const g=new THREE.Group(); g.add(THREE.SkeletonUtils.clone(holder)); setupAnim(g,clips,'plant'); return g; };
+    if(selected===key) rebuildGhost();
+    refreshPlaced(key);
+  });
+  add('player Crazy Dave',PLAYER_MODEL,/crazy.?dave/i,(holder)=>{ daveTpl=holder; useDaveForPlayer(); try{ net.refreshAvatars(); }catch(e){} });
+  for(const [kind,cfg] of Object.entries(ZKINDS)) add('zombie '+kind,cfg,ZOMBIE_RX[kind],(holder,clips)=>{ zombieTpl[kind]=holder; zombieClips[kind]=clips; });
+  showModelLog();
+  await Promise.all(jobs);
+  const bad=Object.values(modelLog).filter(v=>!/^ok/.test(v)).length;
+  toast(bad?bad+' model(s) failed to load (using simple shapes)':'All models loaded');
+}
+
+// ---------- state ----------
+let suns = 50;
+const inventory = {};
+let selected = null, removeMode = false;
+const placed = [];      // {mesh,key,hp,nextSun,cd,grow}
+const sunObjs = [];
+const zombies = [];
+const peas = [];
+let zombiesOn = false, zombieTime = 0, zombieTimer = 3;
+let wave = 0, waveLeft = 0, waveBreak = 4, waveRem = 0;   // wave system (host runs it, everyone displays it)
+let adminPause = false, adminGod = false;
+let isHost = true, myId = 'solo', invuln = 0;
+
+// ---------- UI ----------
+const shopEl = document.getElementById('shop'), invEl = document.getElementById('inv');
+function renderUI(){
+  sunEl.textContent = suns;
+  shopEl.querySelectorAll('.card').forEach(e=>e.remove());
+  PLANT_KEYS.forEach(k=>{
+    const p=PLANTS[k]; const d=document.createElement('div');
+    d.className='card'+(suns<p.cost?' no':'');
+    d.innerHTML=`<b>${p.name}</b><span style="font-size:11px;opacity:.8">${p.desc}</span><span class="cost">☀ ${p.cost}</span>`;
+    d.onclick=()=>buy(k); shopEl.appendChild(d);
+  });
+  invEl.querySelectorAll('.slot').forEach(e=>e.remove());
+  PLANT_KEYS.forEach((k,i)=>{
+    const c=inventory[k]||0; const d=document.createElement('div');
+    d.className='slot'+(selected===k?' sel':'');
+    d.innerHTML=`<span class="n">${i+1}</span>${c?`<b>${PLANTS[k].name}</b><span class="q">×${c}</span>`:'<span style="opacity:.3">empty</span>'}`;
+    d.onclick=()=>select(k); invEl.appendChild(d);
+  });
+}
+function buy(k){
+  const p=PLANTS[k];
+  if(suns<p.cost){ toast('Not enough sun!'); return; }
+  suns-=p.cost; inventory[k]=(inventory[k]||0)+1;
+  if(!selected){ selected=k; rebuildGhost(); }
+  renderUI(); toast(p.name+' added to inventory');
+}
+function select(k){
+  if(!(inventory[k]>0)){ toast("You don't own that plant yet"); return; }
+  selected = selected===k ? null : k; removeMode=false; rebuildGhost(); renderUI();
+}
+const typing = e => e.target && e.target.matches && e.target.matches('input,select,textarea');
+addEventListener('keydown',e=>{
+  if(typing(e)) return;
+  if(e.code.startsWith('Digit')){ const i=+e.code.slice(5)-1; if(PLANT_KEYS[i]) select(PLANT_KEYS[i]); }
+  if(e.code==='Escape'){ selected=null; removeMode=false; rebuildGhost(); renderUI(); }
+  if(e.code==='KeyX'){ removeMode=!removeMode; if(removeMode){selected=null;rebuildGhost();renderUI();} toast(removeMode?'Remove mode: click a plant':'Remove mode off'); }
+});
+
+// ---------- ghost preview ----------
+let ghost=null, ghostValid=false;
+function rebuildGhost(){
+  if(ghost){ scene.remove(ghost); ghost=null; }
+  if(!selected) return;
+  ghost = PLANTS[selected].build();
+  ghost.traverse(o=>{ if(o.isMesh||o.isSkinnedMesh){
+    const fix=m=>{ m=m.clone(); m.transparent=true; m.opacity=.55; return m; };
+    o.material=Array.isArray(o.material)?o.material.map(fix):fix(o.material); o.castShadow=false; }});
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.55,.7,24),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.8,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2; ring.position.y=.03; ring.name='ring'; ghost.add(ring);
+  ghost.visible=false; scene.add(ghost);
+}
+
+// ---------- input ----------
+const keys={};
+addEventListener('keydown',e=>{ if(!typing(e)) keys[e.code]=true; });
+addEventListener('keyup',e=>{ keys[e.code]=false; });
+let yaw=0, pitch=0.5, dist=8;
+let dragging=false, lastX=0, lastY=0, downX=0, downY=0;
+const mouse=new THREE.Vector2(); let mouseIn=false;
+const ray=new THREE.Raycaster();
+const dom=renderer.domElement;
+dom.addEventListener('contextmenu',e=>e.preventDefault());
+dom.addEventListener('mousedown',e=>{ downX=e.clientX; downY=e.clientY; if(e.button===2){dragging=true;lastX=e.clientX;lastY=e.clientY;} });
+addEventListener('mouseup',e=>{ if(e.button===2) dragging=false; });
+addEventListener('mousemove',e=>{
+  mouse.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1); mouseIn=true;
+  if(dragging){ yaw-=(e.clientX-lastX)*0.005; pitch=Math.max(0.12,Math.min(1.3,pitch+(e.clientY-lastY)*0.004)); lastX=e.clientX; lastY=e.clientY; }
+});
+dom.addEventListener('wheel',e=>{ dist=Math.max(4,Math.min(18,dist+e.deltaY*0.01)); });
+dom.addEventListener('click',e=>{
+  if(Math.hypot(e.clientX-downX,e.clientY-downY)>5) return;
+  ray.setFromCamera(mouse,camera);
+  const hits=ray.intersectObjects(sunObjs.map(s=>s.mesh),true);
+  if(hits.length){ let o=hits[0].object; while(o.parent&&o.parent!==scene)o=o.parent; const s=sunObjs.find(s=>s.mesh===o); if(s){collect(s);return;} }
+  if(removeMode){
+    const ph=ray.intersectObjects(placed.map(p=>p.mesh),true);
+    if(ph.length){ let o=ph[0].object; while(o.parent&&o.parent!==scene)o=o.parent;
+      const p=placed.find(p=>p.mesh===o); if(p){ net.delPlant(p); toast('Plant removed'); } }
+    return;
+  }
+  if(selected && ghost && ghostValid){ placePlant(selected, ghost.position.x, ghost.position.z); }
+  else if(selected && ghost && !ghostValid) toast("Can't place there");
+});
+function groundPoint(){
+  ray.setFromCamera(mouse,camera);
+  const t=-ray.ray.origin.y/ray.ray.direction.y;
+  if(t<0||!isFinite(t)) return null;
+  return ray.ray.origin.clone().addScaledVector(ray.ray.direction,t);
+}
+function placePlant(k,x,z){
+  inventory[k]--; if(inventory[k]<=0){ delete inventory[k]; selected=null; rebuildGhost(); }
+  renderUI();
+  net.addPlant(k,x,z);
+}
+function addPlantLocal(id,k,x,z,o){
+  if(!PLANTS[k]) return;
+  const m=PLANTS[k].build();
+  m.position.set(x,0,z); m.rotation.y=Math.random()*0.4-0.2;
+  m.traverse(o2=>{ if(o2.isMesh||o2.isSkinnedMesh){ o2.castShadow=true; o2.frustumCulled=false; } });
+  m.scale.setScalar(0.01); scene.add(m);
+  placed.push({id,owner:o,mesh:m,key:k,hp:PLANTS[k].hp,nextSun:6+Math.random()*3,cd:1,grow:0});
+}
+function removePlant(p){ if(p.squash && p.squash.z && zombies.indexOf(p.squash.z)>=0 && !p.dead) killZombie(p.squash.z,true); scene.remove(p.mesh); const i=placed.indexOf(p); if(i>=0) placed.splice(i,1); }
+
+// ---------- suns ----------
+const sunGeo=new THREE.SphereGeometry(.4,16,12);
+const sunMat=new THREE.MeshBasicMaterial({color:0xffe14d});
+const glowTex=(()=>{ const c=document.createElement('canvas');c.width=c.height=64; const x=c.getContext('2d');
+  const g=x.createRadialGradient(32,32,2,32,32,32); g.addColorStop(0,'rgba(255,240,120,.9)'); g.addColorStop(1,'rgba(255,220,60,0)');
+  x.fillStyle=g;x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+function spawnSun(x,z,fromY=14,value=25){
+  const m=new THREE.Mesh(sunGeo,sunMat);
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,transparent:true,depthWrite:false}));
+  glow.scale.set(2.2,2.2,1); m.add(glow);
+  for(let i=0;i<8;i++){ const r=new THREE.Mesh(new THREE.ConeGeometry(.07,.28,4),sunMat); const a=i/8*Math.PI*2;
+    r.position.set(Math.cos(a)*.55,Math.sin(a)*.55,0); r.rotation.z=a-Math.PI/2; m.add(r); }
+  m.position.set(x,fromY,z); scene.add(m);
+  sunObjs.push({mesh:m,value,landed:false,life:0,baseY:.9});
+}
+
+// ---------- sound effects (hot-linked MP3s from myinstants.com; press M to mute) ----------
+const SFX_BASE='https://www.myinstants.com/media/sounds/';
+const SFX_FILES={ coming:'zombies.mp3', groan1:'plants-vs-zombies-groan-5.mp3', groan2:'plants-vs-zombies-groan-2.mp3',
+  eat:'screen_recording_20210708-163854_chrome_1.mp3', hit:'plants-vs-zombies-hit.mp3', sun:'plants-vs-zombies-sun-pickup.mp3', squash:'pvz-wo-gua-squash-emm.mp3' };
+const SFX_VOL={ coming:1, groan1:.55, groan2:.55, eat:.5, hit:.45, sun:.6, squash:1 };
+const sfxBase={}, sfxLast={}; let sfxMuted=false;
+try{ for(const k in SFX_FILES){ const a=new Audio(SFX_BASE+SFX_FILES[k]); a.preload='auto'; sfxBase[k]=a; } }catch(e){}
+function sfx(name,pos,minGap){
+  if(sfxMuted||!sfxBase[name]) return;
+  const now=performance.now(); if(minGap && now-(sfxLast[name]||0)<minGap) return; sfxLast[name]=now;
+  let v=SFX_VOL[name]||.5;
+  if(pos){ const d=Math.hypot(pos.x-player.position.x,pos.z-player.position.z); v*=Math.max(0,1-d/45); if(v<=0.02) return; }
+  try{ const a=sfxBase[name].cloneNode(); a.volume=Math.min(1,v); const pr=a.play(); if(pr&&pr.catch) pr.catch(()=>{}); }catch(e){}
+}
+addEventListener('keydown',e=>{ if(e.code==='KeyM' && !(e.target&&/INPUT|TEXTAREA/.test(e.target.tagName))){ sfxMuted=!sfxMuted; toast(sfxMuted?'Sound off (M)':'Sound on (M)'); } });
+let sfxCtx=null;
+function synth(kind,pos){                                // tiny WebAudio sounds for the new plants (no files needed)
+  if(sfxMuted) return;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; if(!sfxCtx) sfxCtx=new AC(); if(sfxCtx.state==='suspended') sfxCtx.resume();
+    let v=1; if(pos){ const d=Math.hypot(pos.x-player.position.x,pos.z-player.position.z); v=Math.max(0,1-d/45); if(v<=.02) return; }
+    const t0=sfxCtx.currentTime, g=sfxCtx.createGain(); g.connect(sfxCtx.destination);
+    if(kind==='boom'){
+      const len=Math.floor(sfxCtx.sampleRate*.8), buf=sfxCtx.createBuffer(1,len,sfxCtx.sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(sfxCtx.sampleRate*.18));
+      const src=sfxCtx.createBufferSource(); src.buffer=buf; const f=sfxCtx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=500;
+      src.connect(f); f.connect(g); g.gain.value=.9*v; src.start(t0);
+    } else {                                              // chomp: a short falling thump
+      const o=sfxCtx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(220,t0); o.frequency.exponentialRampToValueAtTime(60,t0+.18);
+      g.gain.setValueAtTime(.35*v,t0); g.gain.exponentialRampToValueAtTime(.001,t0+.22); o.connect(g); o.start(t0); o.stop(t0+.25);
+    }
+  }catch(e){}
+}
+const fxList=[];
+function explosionFx(x,z){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(1,20,14),new THREE.MeshBasicMaterial({color:0xff7a1a,transparent:true,opacity:.85}));
+  m.position.set(x,1,z); scene.add(m); fxList.push({mesh:m,t:0,life:.5});
+  const r=new THREE.Mesh(new THREE.RingGeometry(.8,1,32),new THREE.MeshBasicMaterial({color:0xffe08a,transparent:true,opacity:.9,side:THREE.DoubleSide}));
+  r.rotation.x=-Math.PI/2; r.position.set(x,.1,z); scene.add(r); fxList.push({mesh:r,t:0,life:.6,ring:true});
+  synth('boom',{x,z});
+}
+function updateFx(dt){
+  for(let i=fxList.length-1;i>=0;i--){
+    const f=fxList[i]; f.t+=dt; const u=Math.min(1,f.t/f.life);
+    f.mesh.scale.setScalar(f.ring?(1+u*6):(.5+u*5.5)); f.mesh.material.opacity=(f.ring?.9:.85)*(1-u);
+    if(u>=1){ scene.remove(f.mesh); fxList.splice(i,1); }
+  }
+}
+let groanTimer=4, eatTimer=0;
+function zombieAmbience(dt){
+  // random groans from a nearby zombie
+  groanTimer-=dt;
+  if(groanTimer<=0){
+    groanTimer=3+Math.random()*5;
+    const near=zombies.filter(z=>!z.squashed && Math.hypot(z.mesh.position.x-player.position.x,z.mesh.position.z-player.position.z)<40);
+    if(near.length){ const z=near[Math.floor(Math.random()*near.length)]; sfx(Math.random()<.5?'groan1':'groan2',z.mesh.position); }
+  }
+  // chewing while a zombie is eating something close by
+  eatTimer-=dt;
+  if(eatTimer<=0){
+    let best=null, bd=1e9;
+    for(const z of zombies){ if(z.state==='eat' && !z.squashed){ const d=Math.hypot(z.mesh.position.x-player.position.x,z.mesh.position.z-player.position.z); if(d<bd){ bd=d; best=z; } } }
+    if(best){ sfx('eat',best.mesh.position); eatTimer=1.4; } else eatTimer=0.3;
+  }
+}
+
+function collect(s){ sfx('sun'); suns+=s.value; scene.remove(s.mesh); const i=sunObjs.indexOf(s); if(i>=0) sunObjs.splice(i,1); renderUI(); }
+let skyTimer=2;
+
+// ---------- zombie walk cycle ----------
+const GAIT = { limbs:true, axis:'x', leg:0.75, arm:0.3, armsOut:true, armOut:-1.4 };
+const _q=new THREE.Quaternion(), _axes={x:new THREE.Vector3(1,0,0),y:new THREE.Vector3(0,1,0),z:new THREE.Vector3(0,0,1)};
+function findLimbs(root){
+  const legs=[], arms=[];
+  const sideOf=n=>{ if(/left/i.test(n)||/(^|[._\-])l($|[._\-\d])/i.test(n)) return 1; if(/right/i.test(n)||/(^|[._\-])r($|[._\-\d])/i.test(n)) return -1; return 0; };
+  const add=(o,list)=>{
+    let s=sideOf(o.name);
+    if(!s) s = (o.isBone ? (list.length%2?-1:1) : (o.position.x>=0?1:-1));
+    o.userData.rest=o.quaternion.clone(); list.push({bone:o,sign:s});
+  };
+  root.traverse(o=>{
+    const n=o.name||''; if(!(o.isBone||n==='leg'||n==='arm')) return;
+    if(/thigh|upleg|up_leg|upperleg|upper_leg/i.test(n)||n==='leg') add(o,legs);
+    else if(/upperarm|upper_arm|uparm|up_arm/i.test(n)||n==='arm') add(o,arms);
+  });
+  if(!legs.length && !arms.length){   // looser second pass for oddly named rigs
+    root.traverse(o=>{
+      const n=o.name||''; if(!o.isBone) return;
+      if(/leg/i.test(n) && !/low|calf|shin|foot|knee|toe|ankle/i.test(n)) add(o,legs);
+      else if(/arm/i.test(n) && !/fore|low|hand|wrist|finger|elbow/i.test(n)) add(o,arms);
+    });
+  }
+  return {legs,arms};
+}
+// whole-body gait: footstep bounce, side-to-side roll, forward lurch, head-turn wobble
+function gaitBody(z,dt,st){
+  const b=z.body; if(!b) return;
+  const k=z.walkClip?0.35:1;                       // real walk clip? keep procedural motion light
+  z.state=st;
+  if(st==='walk'){
+    z.stride+=dt*z.speed*4.5;                      // ~one full step cycle per 1.4 world units
+    const s=z.stride, sp=Math.min(1.5,z.speed/1.1);
+    b.position.y=Math.abs(Math.sin(s))*0.10*sp*k;
+    b.rotation.z=Math.sin(s)*0.10*k;
+    b.rotation.x=(0.13+Math.sin(s*2)*0.035)*k;
+    b.rotation.y=Math.sin(s)*0.09*k;
+  } else {                                         // chewing / clawing: lean in and thrash
+    z.stride+=dt*7;
+    const s=z.stride;
+    b.position.y=Math.max(0,Math.sin(s*2))*0.04;
+    b.rotation.x=0.2+Math.sin(s)*0.15;
+    b.rotation.z=Math.sin(s*.5)*0.04;
+    b.rotation.y=Math.sin(s*.7)*0.06;
+  }
+}
+// limb swing: legs scissor, arms counter-swing (applied after animation mixers so it wins)
+function gaitLimbs(z){
+  if(!z.limbs) return;
+  const s=z.stride, ax=_axes[GAIT.axis]||_axes.x, sp=Math.min(1.5,z.speed/1.1);
+  const walking=z.state==='walk';
+  if(GAIT.limbs && !z.walkClip){
+    for(const L of z.limbs.legs){
+      const ang=walking?Math.sin(s)*GAIT.leg*sp*L.sign:0;
+      _q.setFromAxisAngle(ax,ang); L.bone.quaternion.copy(L.bone.userData.rest).multiply(_q);
+    }
+  }
+  if(GAIT.armsOut){
+    // classic zombie pose: both arms raised straight out in front, with a little sway
+    for(const L of z.limbs.arms){
+      if(!L.bone.isBone) continue;                       // fallback box arms already point forward
+      const sway=walking?Math.sin(s)*0.06:Math.sin(s*1.5)*0.14;
+      _q.setFromAxisAngle(ax,GAIT.armOut+sway); L.bone.quaternion.copy(L.bone.userData.rest).multiply(_q);
+    }
+  } else if(GAIT.limbs && !z.walkClip){
+    for(const L of z.limbs.arms){
+      const ang=walking?-Math.sin(s)*GAIT.arm*sp*L.sign:Math.sin(s+L.sign)*GAIT.arm*1.6;
+      _q.setFromAxisAngle(ax,ang); L.bone.quaternion.copy(L.bone.userData.rest).multiply(_q);
+    }
+  }
+}
+
+// ---------- zombies ----------
+// kind -> [unlock time in seconds, weight]
+const UNLOCK = { walker:[0,10], cone:[20,6], newspaper:[30,5], dancer:[45,5], bucket:[70,4], football:[90,3], yeti:[110,2], gargantuar:[170,1] };
+function pickKind(){
+  const opts=Object.entries(UNLOCK).filter(([k,[t]])=>zombieTime>=t);
+  let tot=opts.reduce((s,[k,[t,w]])=>s+w,0), r=Math.random()*tot;
+  for(const [k,[t,w]] of opts){ if((r-=w)<=0) return k; }
+  return 'walker';
+}
+function makeZombie(kind,x,z,id,hp){
+  if(!ZKINDS[kind]) kind='walker';
+  const cfg=ZKINDS[kind];
+  const g=new THREE.Group();
+  g.add(zombieTpl[kind]?THREE.SkeletonUtils.clone(zombieTpl[kind]):fallbackZombie(kind));
+  const bodyObj=g.children[0];
+  const limbs=findLimbs(bodyObj);                       // grab limb bones before animation touches them
+  if(zombieTpl[kind]) setupAnim(g,zombieClips[kind],'zombie');
+  const walkClip=!!(zombieTpl[kind] && (zombieClips[kind]||[]).some(c=>/walk|run|shamble|move|lurch/i.test(c.name)));
+  if(walkClip && g.userData.baseA) g.userData.baseA.timeScale=cfg.speed/1.1;
+  g.traverse(o=>{ if(o.isMesh||o.isSkinnedMesh){ o.castShadow=true; o.frustumCulled=false; } });
+  g.position.set(x,0,z); scene.add(g);
+  const zo={id,mesh:g,body:bodyObj,limbs,walkClip,stride:Math.random()*6,state:'walk',kind,hp:hp||cfg.hp,maxhp:cfg.hp,speed:cfg.speed*(0.9+Math.random()*.2),dmg:cfg.dmg,reach:cfg.reach||1.15,phase:Math.random()*6,tp:0};
+  zombies.push(zo); return zo;
+}
+function startWave(){
+  wave++; waveLeft=Math.min(70,6+wave*3); zombieTimer=1.5; zombieTime=wave*22;   // later waves unlock tougher zombie kinds
+  waveBreak=Math.max(6,15-wave);
+  toast('Wave '+wave+'! '+waveLeft+' zombies, tougher than before'); if(wave>1) sfx('coming');
+}
+function spawnZombie(forceKind,near){
+  const kind=forceKind||pickKind();
+  const anchor=net.randomPlayer();
+  const a=Math.random()*Math.PI*2, r=near?(9+Math.random()*5):(24+Math.random()*10);
+  const x=Math.max(-WORLD+1,Math.min(WORLD-1,anchor.x+Math.cos(a)*r));
+  const z=Math.max(-WORLD+1,Math.min(WORLD-1,anchor.z+Math.sin(a)*r));
+  const zo=makeZombie(kind,x,z,net.nextZid());
+  const w=Math.max(1,wave)-1;                          // wave 1 = normal strength
+  zo.hp=zo.maxhp=Math.round(zo.hp*(1+0.2*w));
+  zo.speed*=Math.min(1.8,1+0.04*w);
+  zo.dmg*=1+0.12*w;
+  if(zo.walkClip && zo.mesh.userData.baseA) zo.mesh.userData.baseA.timeScale=zo.speed/1.1;
+}
+function killZombie(z,drop){
+  if(drop && Math.random()<0.6){ spawnSun(z.mesh.position.x,z.mesh.position.z,1.6,15); net.ev('d',r1(z.mesh.position.x),r1(z.mesh.position.z)); }
+  scene.remove(z.mesh); const i=zombies.indexOf(z); if(i>=0) zombies.splice(i,1);
+}
+
+// ---------- peas ----------
+const peaGeo=new THREE.SphereGeometry(.17,10,8), peaMat=new THREE.MeshLambertMaterial({color:0x7ddc4a});
+const peaMats={};
+function firePea(from,target,cfg){
+  const m=new THREE.Mesh(peaGeo,peaMats[cfg.color]||(peaMats[cfg.color]=new THREE.MeshBasicMaterial({color:cfg.color})));
+  const start=new THREE.Vector3(from.x,1.25,from.z);
+  const aim=new THREE.Vector3(target.x,1.1,target.z);
+  const dir=aim.clone().sub(start).normalize();
+  m.position.copy(start).addScaledVector(dir,.7); scene.add(m);
+  peas.push({mesh:m,vel:dir.multiplyScalar(cfg.speed),life:2,dmg:cfg.dmg});
+}
+
+// ---------- loop ----------
+const clock=new THREE.Clock();
+function frame(){
+  const dt=Math.min(clock.getDelta(),0.05), t=clock.elapsedTime;
+
+  if(keys.KeyQ) yaw+=1.8*dt;
+  if(keys.KeyE) yaw-=1.8*dt;
+
+  // player movement (relative to camera)
+  let mx=0,mz=0;
+  if(keys.KeyW||keys.ArrowUp) mz-=1;
+  if(keys.KeyS||keys.ArrowDown) mz+=1;
+  if(keys.KeyA||keys.ArrowLeft) mx-=1;
+  if(keys.KeyD||keys.ArrowRight) mx+=1;
+  if(mx||mz){
+    const l=Math.hypot(mx,mz); mx/=l; mz/=l;
+    const sp=(keys.ShiftLeft||keys.ShiftRight?9:5.5);
+    const dx=(mx*Math.cos(yaw)+mz*Math.sin(yaw)), dz=(-mx*Math.sin(yaw)+mz*Math.cos(yaw));
+    player.position.x=Math.max(-WORLD+.5,Math.min(WORLD-.5,player.position.x+dx*sp*dt));
+    player.position.z=Math.max(-WORLD+.5,Math.min(WORLD-.5,player.position.z+dz*sp*dt));
+    player.rotation.y=turn(player.rotation.y,Math.atan2(dx,dz),dt*12);
+    legs[0].rotation.x=Math.sin(t*12)*.7; legs[1].rotation.x=-Math.sin(t*12)*.7;
+    if(playerDave) poseDave(playerDave,t*12,1);
+    player.position.y=Math.abs(Math.sin(t*12))*.06;
+  } else { legs[0].rotation.x=legs[1].rotation.x=0; if(playerDave) poseDave(playerDave,0,0); player.position.y=0; }
+
+  // camera
+  const cx=player.position.x+Math.sin(yaw)*Math.cos(pitch)*dist;
+  const cz=player.position.z+Math.cos(yaw)*Math.cos(pitch)*dist;
+  const cy=1.4+Math.sin(pitch)*dist;
+  camera.position.lerp(new THREE.Vector3(cx,cy,cz),Math.min(1,dt*10));
+  camera.lookAt(player.position.x,1.2,player.position.z);
+  sunLight.target.position.copy(player.position);
+  sunLight.position.set(player.position.x+15,25,player.position.z+10);
+
+  // sky suns near the player
+  skyTimer-=dt;
+  if(skyTimer<=0){ skyTimer=5+Math.random()*4;
+    spawnSun(player.position.x+(Math.random()*2-1)*18, player.position.z+(Math.random()*2-1)*14); }
+
+  for(let i=sunObjs.length-1;i>=0;i--){
+    const s=sunObjs[i], m=s.mesh;
+    m.rotation.z+=dt*1.2;
+    if(!s.landed){ m.position.y-=3*dt; if(m.position.y<=s.baseY){ m.position.y=s.baseY; s.landed=true; } }
+    else { s.life+=dt; m.position.y=s.baseY+Math.sin(t*3+i)*.08; if(s.life>18) m.visible=(Math.floor(s.life*6)%2===0); if(s.life>24){ scene.remove(m); sunObjs.splice(i,1); continue; } }
+    const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z;
+    if(m.position.y<2.5 && Math.hypot(dx,dz)<1.3) collect(s);
+  }
+
+  // zombie waves: every wave is bigger, and its zombies are tougher, faster and hit harder
+  if(isHost && zombiesOn){
+    if(waveLeft>0){
+      zombieTimer-=dt;
+      if(zombieTimer<=0){
+        zombieTimer=Math.max(0.6,2.4-wave*0.13);
+        if(zombies.length<Math.min(45,12+wave*2) && !adminPause){ spawnZombie(); waveLeft--; }
+      }
+    } else if(zombies.length===0){
+      waveBreak-=dt;
+      if(waveBreak<=0) startWave();
+    }
+    waveRem=waveLeft+zombies.length;
+  }
+
+  // zombies (the host simulates them; everyone else follows the snapshots)
+  if(isHost) for(let i=zombies.length-1;i>=0;i--){
+    const z=zombies[i], p=z.mesh.position;
+    if(z.squashed) continue;                          // flattened by a Thornberry
+    z.tp=0;
+    // nearest plant else player
+    let target=null, td=45;
+    for(const pl of placed){ const d=Math.hypot(pl.mesh.position.x-p.x,pl.mesh.position.z-p.z); if(d<td){ td=d; target=pl; } }
+    let tx,tz,isPlant=!!target, tp=null;
+    let np=null, pd=1e9;
+    for(const q of net.allPlayers()){ const d=Math.hypot(q.x-p.x,q.z-p.z); if(d<pd){ pd=d; np=q; } }
+    if(target){ tx=target.mesh.position.x; tz=target.mesh.position.z; }
+    else if(np){ tx=np.x; tz=np.z; td=pd; tp=np; }
+    else { tx=p.x; tz=p.z; td=0; }
+    // also prefer a player if much closer
+    if(target && np && pd<6 && pd<td){ tx=np.x; tz=np.z; td=pd; isPlant=false; target=null; tp=np; }
+    const dx=tx-p.x, dz=tz-p.z;
+    z.mesh.rotation.y=turn(z.mesh.rotation.y,Math.atan2(dx,dz),dt*6);
+    if(z.kind==='newspaper' && !z.mad && z.hp<z.maxhp*0.5){ z.mad=true; z.speed*=2.3; }
+    let st='walk';
+    if(td>z.reach){
+      p.x+=dx/td*z.speed*dt; p.z+=dz/td*z.speed*dt;
+    } else if(isPlant){
+      st='eat'; target.hp-=z.dmg*dt;
+      if(target.hp<=0){ net.delPlant(target); toast('A plant was eaten!'); }
+    } else {
+      st='eat'; z.tp=tp?tp.id:0;
+      if(tp && tp.local){ if(!adminGod && invuln<=0) playerHp-=z.dmg*0.8*dt; sinceHit=0; }
+    }
+    gaitBody(z,dt,st);
+    // separation
+    for(const o of zombies){ if(o===z) continue; const ox=p.x-o.mesh.position.x, oz=p.z-o.mesh.position.z, od=Math.hypot(ox,oz);
+      if(od>0 && od<.9){ p.x+=ox/od*dt*1.5; p.z+=oz/od*dt*1.5; } }
+    if(z.hp<=0) killZombie(z,true);
+  }
+
+  net.tick(dt);
+  zombieAmbience(dt); updateFx(dt);
+
+  // plants
+  for(let i=placed.length-1;i>=0;i--){
+    const p=placed[i]; if(!p.mesh) continue;
+    if(p.grow<1){ p.grow=Math.min(1,p.grow+dt*3); const e=1-Math.pow(1-p.grow,3); p.mesh.scale.setScalar(Math.max(.01,e*(1+Math.sin(e*3.14)*.15))); }
+    const f=p.mesh.userData.flower; if(f){ f.rotation.z+=dt*.5; }
+    if(p.key==='sunpetal' && p.owner===myId){
+      p.nextSun-=dt;
+      if(p.nextSun<=0){ p.nextSun=9+Math.random()*3;
+        spawnSun(p.mesh.position.x+(Math.random()-.5)*1.6,p.mesh.position.z+(Math.random()-.5)*1.6,2.2,25); }
+    }
+    if(isHost && p.key==='thornberry' && p.grow>=1){
+      if(!p.squash){
+        let best=null, bd=2.8;
+        for(const z of zombies){ if(z.squashed) continue; const d=Math.hypot(z.mesh.position.x-p.mesh.position.x,z.mesh.position.z-p.mesh.position.z); if(d<bd){ bd=d; best=z; } }
+        if(best){ p.squash={phase:'jump',t:0,z:best,sx:p.mesh.position.x,sz:p.mesh.position.z,tx:best.mesh.position.x,tz:best.mesh.position.z}; best.squashed=true; }
+      } else {
+        const q=p.squash; q.t+=dt;
+        if(q.phase==='jump'){
+          const u=Math.min(1,q.t/0.55);
+          if(zombies.indexOf(q.z)>=0){ q.tx=q.z.mesh.position.x; q.tz=q.z.mesh.position.z; }
+          p.mesh.position.x=q.sx+(q.tx-q.sx)*u; p.mesh.position.z=q.sz+(q.tz-q.sz)*u;
+          p.mesh.position.y=Math.sin(u*Math.PI)*2.4;
+          p.mesh.scale.set(1-Math.sin(u*Math.PI)*.1,1+Math.sin(u*Math.PI)*.2,1-Math.sin(u*Math.PI)*.1);
+          if(u>=1){ q.phase='slam'; q.t=0; p.mesh.position.y=0; sfx('squash',p.mesh.position); net.ev('s',r1(p.mesh.position.x),r1(p.mesh.position.z));
+            if(zombies.indexOf(q.z)>=0){ q.z.mesh.scale.set(1.25,0.1,1.25); q.z.mesh.position.y=0; } }
+        } else {
+          const u=Math.min(1,q.t/0.35);
+          p.mesh.scale.set(1+u*.2,1-u*.55,1+u*.2);
+          if(u>=1){ const zz=q.z; if(zombies.indexOf(zz)>=0) killZombie(zz,true); p.dead=true; }
+        }
+      }
+    }
+    if(isHost && p.key==='punchchoy' && p.grow>=1){
+      p.cd-=dt;
+      let best=null, bd=2.4;
+      for(const z of zombies){ const d=Math.hypot(z.mesh.position.x-p.mesh.position.x,z.mesh.position.z-p.mesh.position.z); if(d<bd){ bd=d; best=z; } }
+      if(best){
+        p.mesh.rotation.y=turn(p.mesh.rotation.y,Math.atan2(best.mesh.position.x-p.mesh.position.x,best.mesh.position.z-p.mesh.position.z),dt*10);
+        if(p.cd<=0){ p.cd=0.7; best.hp-=55; p.punch=0.2; playAttack(p.mesh); net.ev('a',p.id); }
+      }
+      if(p.punch>0) p.punch-=dt;
+    }
+    // Berryblast: arms when a zombie gets close, swells, then blows up everything in range
+    if(isHost && p.key==='berryblast' && p.grow>=1){
+      if(p.fuse===undefined){
+        for(const z of zombies){ if(!z.squashed && Math.hypot(z.mesh.position.x-p.mesh.position.x,z.mesh.position.z-p.mesh.position.z)<3.4){ p.fuse=0.9; break; } }
+      } else {
+        p.fuse-=dt; const u=1-Math.max(0,p.fuse)/0.9;
+        p.mesh.scale.setScalar(1+u*.45+Math.sin(p.fuse*45)*.05);
+        if(p.fuse<=0){
+          const px=p.mesh.position.x, pz=p.mesh.position.z;
+          for(const z of zombies){ if(Math.hypot(z.mesh.position.x-px,z.mesh.position.z-pz)<6) z.hp-=550; }
+          explosionFx(px,pz); net.ev('x',r1(px),r1(pz)); p.dead=true;
+        }
+      }
+    }
+    // Chompvine: swallows one zombie whole (big ones just get badly bitten), then chews for a while
+    if(isHost && p.key==='chompvine' && p.grow>=1){
+      if(p.chew>0){ p.chew-=dt; p.mesh.scale.setScalar(1+Math.sin(p.chew*6)*.025); }
+      else {
+        let best=null, bd=2.8;
+        for(const z of zombies){ if(z.squashed) continue; const d=Math.hypot(z.mesh.position.x-p.mesh.position.x,z.mesh.position.z-p.mesh.position.z); if(d<bd){ bd=d; best=z; } }
+        if(best){
+          p.mesh.rotation.y=Math.atan2(best.mesh.position.x-p.mesh.position.x,best.mesh.position.z-p.mesh.position.z);
+          if(best.hp<=900) best.hp=0; else best.hp-=450;
+          p.chew=14; playAttack(p.mesh); synth('chomp',p.mesh.position); net.ev('c',p.id,r1(p.mesh.position.x),r1(p.mesh.position.z));
+        }
+      }
+    }
+    const sh=SHOOTERS[p.key];
+    // Twinshooter's second seed, a moment after the first
+    if(isHost && sh && sh.burst>1 && p.burstLeft>0){
+      p.burstT-=dt;
+      if(p.burstT<=0){
+        let best=null, bd=sh.range;
+        for(const z of zombies){ const d=Math.hypot(z.mesh.position.x-p.mesh.position.x,z.mesh.position.z-p.mesh.position.z); if(d<bd){ bd=d; best=z; } }
+        if(best){ firePea(p.mesh.position,best.mesh.position,sh); net.ev('p',p.id,p.key,r1(p.mesh.position.x),r1(p.mesh.position.z),r1(best.mesh.position.x),r1(best.mesh.position.z)); }
+        p.burstLeft--; p.burstT=0.28;
+      }
+    }
+    if(isHost && sh && p.grow>=1){
+      let best=null, bd=sh.range;
+      for(const z of zombies){ const d=Math.hypot(z.mesh.position.x-p.mesh.position.x,z.mesh.position.z-p.mesh.position.z); if(d<bd){ bd=d; best=z; } }
+      p.cd-=dt;
+      if(best){
+        const a=Math.atan2(best.mesh.position.x-p.mesh.position.x,best.mesh.position.z-p.mesh.position.z);
+        p.mesh.rotation.y=turn(p.mesh.rotation.y,a,dt*8);
+        if(p.cd<=0){ p.cd=sh.cd; if(sh.burst>1){ p.burstLeft=sh.burst-1; p.burstT=0.28; } firePea(p.mesh.position,best.mesh.position,sh); playAttack(p.mesh); net.ev('p',p.id,p.key,r1(p.mesh.position.x),r1(p.mesh.position.z),r1(best.mesh.position.x),r1(best.mesh.position.z)); }
+      }
+    }
+  }
+
+  for(let i=placed.length-1;i>=0;i--){ if(placed[i].dead) net.delPlant(placed[i]); }
+
+  // animation mixers
+  for(const p of placed){ const mx=p.mesh.userData.mixer; if(mx) mx.update(dt); }
+  for(const z of zombies){ const mx=z.mesh.userData.mixer; if(mx) mx.update(dt); gaitLimbs(z); }
+  if(ghost && ghost.userData.mixer) ghost.userData.mixer.update(dt);
+
+  // peas
+  for(let i=peas.length-1;i>=0;i--){
+    const pe=peas[i]; pe.mesh.position.addScaledVector(pe.vel,dt); pe.life-=dt;
+    let hit=false;
+    for(const z of zombies){
+      const zp=z.mesh.position;
+      if(Math.hypot(zp.x-pe.mesh.position.x,zp.z-pe.mesh.position.z)<.8 && pe.mesh.position.y<(z.kind==='gargantuar'?4:2.6)){ if(isHost) z.hp-=pe.dmg; hit=true; break; }
+    }
+    if(hit) sfx('hit',pe.mesh.position,60);
+    if(hit||pe.life<=0){ scene.remove(pe.mesh); peas.splice(i,1); }
+  }
+
+  // player health
+  sinceHit+=dt; invuln=Math.max(0,invuln-dt);
+  if(sinceHit>4) playerHp=Math.min(100,playerHp+4*dt);
+  if(playerHp<=0){
+    playerHp=100; player.position.set(0,0,0); invuln=5;
+    if(isHost) for(let i=zombies.length-1;i>=0;i--){ if(Math.hypot(zombies[i].mesh.position.x,zombies[i].mesh.position.z)<12) killZombie(zombies[i],false); }
+    toast('You were overrun — back at the start!');
+  }
+  hpBar.style.width=Math.max(0,playerHp)+'%';
+  const nSeed=placed.filter(p=>p.key==='seedshooter').length;
+  if(isHost && !zombiesOn && nSeed>=2){ zombiesOn=true; wave=0; waveLeft=0; waveBreak=4; toast('Zombies are coming!'); sfx('coming'); }
+  statusEl.textContent=net.prefix()+(zombiesOn?(wave<1?'Get ready...':('Wave '+wave+' · zombies left: '+waveRem+(waveRem===0?' (next wave soon)':''))):('Plant '+Math.max(0,2-nSeed)+' more Seedshooter(s) to wake the zombies'));
+
+  // ghost
+  if(ghost){
+    const gp=mouseIn?groundPoint():null;
+    if(gp && Math.abs(gp.x)<WORLD-1 && Math.abs(gp.z)<WORLD-1){
+      ghost.visible=true; ghost.position.set(gp.x,0,gp.z);
+      ghostValid=!placed.some(p=>Math.hypot(p.mesh.position.x-gp.x,p.mesh.position.z-gp.z)<1.1);
+    } else { ghost.visible=false; ghostValid=false; }
+    const ring=ghost.getObjectByName('ring'); if(ring) ring.material.color.set(ghostValid?0x66ff66:0xff4444);
+  }
+
+  renderer.render(scene,camera);
+  requestAnimationFrame(frame);
+}
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+// ---------- multiplayer (Firebase Realtime Database) ----------
+// One player (the one who joined the room first) is the "host": their browser runs the zombies,
+// plant combat and peas, and publishes a snapshot ~8x/second. Everyone else follows the snapshot.
+// Plants and player positions live in the database directly. Suns/inventory stay per-player.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBunoQ_AvkHZyG6Q27XH7AHUNk2LrpfCq0",
+  authDomain: "plantsvszombies-a4c6b.firebaseapp.com",
+  databaseURL: "https://plantsvszombies-a4c6b-default-rtdb.firebaseio.com",
+  projectId: "plantsvszombies-a4c6b",
+  storageBucket: "plantsvszombies-a4c6b.firebasestorage.app",
+  messagingSenderId: "807323640810",
+  appId: "1:807323640810:web:4419405b0e9d17869bc893",
+  measurementId: "G-0XML1LJYF5"
+};
+const KIND_KEYS = Object.keys(ZKINDS);
+const r1 = v => Math.round(v*10)/10, r2 = v => Math.round(v*100)/100;
+const remotes = {};                                   // pid -> {mesh,tx,tz,tr,legs,ph,name}
+
+const net = (function(){
+  let db=null, base=null, me=null, joined=false, room='main';
+  const players = {};
+  let hostId=null, posTimer=0, snapTimer=0, hudTimer=0, lastX=1e9, lastZ=1e9, lastR=1e9, hbTimer=0;
+  let zid=1, evSeq=0, lastEv=0, gotFirst=false, plantSeq=0, evList=[];
+  const playersEl = document.getElementById('players');
+
+  function colorFor(id){ let h=0; for(const c of id) h=(h*31+c.charCodeAt(0))%360; return new THREE.Color().setHSL(h/360,.65,.55); }
+  function nameSprite(text){
+    const c=document.createElement('canvas'); c.width=256; c.height=64; const x=c.getContext('2d');
+    x.font='bold 30px system-ui,Arial'; x.textAlign='center';
+    x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(0,8,256,48); x.fillStyle='#fff'; x.fillText(String(text).slice(0,16),128,42);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));
+    sp.scale.set(2.2,.55,1); sp.position.y=2.55; sp.renderOrder=10; return sp;
+  }
+  function makeAvatar(id,name){
+    const g=new THREE.Group(), col=colorFor(id).getHex();
+    const b=mk(new THREE.CylinderGeometry(.38,.42,1.2,12),col); b.position.y=.9; b.castShadow=true; g.add(b);
+    const h=mk(new THREE.SphereGeometry(.33,16,12),0xffd7b0); h.position.y=1.65; h.castShadow=true; g.add(h);
+    const hat2=mk(new THREE.ConeGeometry(.4,.35,12),0xe8c547); hat2.position.y=2.0; g.add(hat2);
+    const brim2=mk(new THREE.CylinderGeometry(.55,.55,.04,16),0xe8c547); brim2.position.y=1.85; g.add(brim2);
+    const nose2=mk(new THREE.BoxGeometry(.12,.1,.2),0xe5b98a); nose2.position.set(0,1.62,.33); g.add(nose2);
+    const lg=[]; for(const sx of [-1,1]){ const l=mk(new THREE.BoxGeometry(.22,.5,.25),0x1f3a6b); l.position.set(sx*.18,.25,0); l.castShadow=true; g.add(l); lg.push(l); }
+    g.add(nameSprite(name)); g.userData.legs=lg; return g;
+  }
+  function daveAvatar(id,name){
+    const g=new THREE.Group(); const d=makeDave(); d.traverse(o=>{ if(o.isMesh||o.isSkinnedMesh){ o.castShadow=true; o.frustumCulled=false; } }); g.add(d);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(.55,.75,24),new THREE.MeshBasicMaterial({color:colorFor(id).getHex(),side:THREE.DoubleSide,transparent:true,opacity:.8}));
+    ring.rotation.x=-Math.PI/2; ring.position.y=.03; g.add(ring);         // coloured ring so players are easy to tell apart
+    g.add(nameSprite(name)); g.userData.dave=d.userData.dave; g.userData.daveRoot=d; return g;
+  }
+  function ensureRemote(id,v){
+    let r=remotes[id];
+    if(!r){
+      const mesh=daveTpl?daveAvatar(id,v.n||'Player'):makeAvatar(id,v.n||'Player'); mesh.position.set(v.x||0,0,v.z||0); scene.add(mesh);
+      r=remotes[id]={id,name:v.n,mesh,tx:v.x||0,tz:v.z||0,tr:v.r||0,legs:mesh.userData.legs,ph:0};
+    }
+    r.tx=v.x||0; r.tz=v.z||0; r.tr=v.r||0;
+  }
+  function refreshAvatars(){                          // Dave finished loading: swap the stand-ins already in the room
+    for(const id in remotes){ const r=remotes[id]; if(r.mesh.userData.dave) continue;
+      const m=daveAvatar(id,r.name||'Player'); m.position.copy(r.mesh.position); m.rotation.copy(r.mesh.rotation);
+      scene.remove(r.mesh); scene.add(m); r.mesh=m; r.legs=m.userData.legs; }
+  }
+  function removeRemote(id){ const r=remotes[id]; if(r){ scene.remove(r.mesh); delete remotes[id]; } }
+  function findPlant(id){ return placed.find(p=>p.id===id); }
+  function clearZombies(){ for(const z of zombies) scene.remove(z.mesh); zombies.length=0; }
+  function becomeHost(){
+    zid=zombies.reduce((m,z)=>Math.max(m,+z.id||0),0)+1;
+    evSeq=Math.max(evSeq,lastEv);
+    waveLeft=0; waveBreak=Math.min(waveBreak,5);        // carry on from the current wave
+    for(const z of zombies){ delete z.tx; delete z.tz; }
+    toast('You are now running the zombies');
+  }
+  function updateHud(){
+    if(!joined){ playersEl.style.display='none'; return; }
+    playersEl.style.display='block'; playersEl.textContent='';
+    for(const id in players){
+      const d=document.createElement('div'), dot=document.createElement('span');
+      dot.className='dot'; dot.style.background='#'+colorFor(id).getHexString();
+      d.appendChild(dot);
+      d.appendChild(document.createTextNode((players[id].n||'Player')+(id===myId?' (you)':'')+(id===hostId?' ★':'')));
+      playersEl.appendChild(d);
+    }
+  }
+  function onPlayers(){
+    let best=null, bj=Infinity;
+    for(const id in players){ const j=+players[id].j||1e15; if(j<bj||(j===bj&&best!==null&&id<best)){ best=id; bj=j; } }
+    if(best!==hostId){
+      const was=isHost; hostId=best; isHost=(best===myId);
+      if(isHost && !was) becomeHost();
+      if(!isHost && was) clearZombies();
+    }
+    for(const id in players){ if(id!==myId) ensureRemote(id,players[id]); }
+    updateHud();
+  }
+
+  // ----- host: publish the world -----
+  function publish(){
+    const z=zombies.map(zo=>[zo.id,KIND_KEYS.indexOf(zo.kind),r1(zo.mesh.position.x),r1(zo.mesh.position.z),r2(zo.mesh.rotation.y),Math.round(zo.hp),(zo.state==='eat'?1:0)|(zo.squashed?2:0),zo.tp||0]);
+    const ps=[];
+    for(const p of placed){ if(p.squash||p.fuse!==undefined){ const m=p.mesh; ps.push([p.id,r2(m.position.x),r2(m.position.y),r2(m.position.z),r2(m.scale.x),r2(m.scale.y),r2(m.scale.z)]); } }
+    const now=Date.now(); evList=evList.filter(e=>now-e.t<1500);
+    base.child('world').set(JSON.stringify({h:myId,on:zombiesOn?1:0,w:wave,r:waveRem,z,ps,e:evList.map(e=>e.a)})).catch(()=>{});
+  }
+  // ----- everyone else: apply the host's snapshot -----
+  function applyWorld(str){
+    let w; try{ w=JSON.parse(str); }catch(e){ return; }
+    if(!w || w.h!==hostId) return;                    // stale snapshot from a previous host
+    if(w.on && !zombiesOn){ toast('Zombies are coming!'); sfx('coming'); }
+    zombiesOn=!!w.on;
+    if(w.w>wave){ toast('Wave '+w.w+'! Zombies are tougher'); if(w.w>1) sfx('coming'); }
+    wave=w.w||0; waveRem=w.r||0;
+    const seen=new Set();
+    for(const a of (w.z||[])){
+      seen.add(a[0]);
+      let zo=zombies.find(q=>q.id===a[0]);
+      if(!zo){ zo=makeZombie(KIND_KEYS[a[1]],a[2],a[3],a[0],a[5]); zo.mesh.rotation.y=a[4]; }
+      zo.tx=a[2]; zo.tz=a[3]; zo.try=a[4]; zo.hp=a[5]; zo.flags=a[6]; zo.tp=a[7];
+    }
+    for(let i=zombies.length-1;i>=0;i--){ if(!seen.has(zombies[i].id)){ scene.remove(zombies[i].mesh); zombies.splice(i,1); } }
+    for(const a of (w.ps||[])){ const p=findPlant(a[0]); if(p) p.pt=a; }
+    for(const e of (w.e||[])){
+      if(e[0]<=lastEv) continue;
+      lastEv=Math.max(lastEv,e[0]);
+      if(!gotFirst) continue;                         // don't replay events from before we joined
+      if(e[1]==='p'){ const sh=SHOOTERS[e[3]]; if(sh) firePea({x:e[4],z:e[5]},{x:e[6],z:e[7]},sh); const pl=findPlant(e[2]); if(pl) playAttack(pl.mesh); }
+      else if(e[1]==='a'){ const pl=findPlant(e[2]); if(pl) playAttack(pl.mesh); }
+      else if(e[1]==='d'){ spawnSun(e[2],e[3],1.6,15); }
+      else if(e[1]==='s'){ sfx('squash',{x:e[2],z:e[3]}); }
+      else if(e[1]==='x'){ explosionFx(e[2],e[3]); }
+      else if(e[1]==='c'){ const pl=findPlant(e[2]); if(pl) playAttack(pl.mesh); synth('chomp',{x:e[3],z:e[4]}); }
+    }
+    gotFirst=true;
+  }
+
+  const out = {
+    refreshAvatars,
+    allPlayers(){
+      const a=[{id:myId,x:player.position.x,z:player.position.z,local:true}];
+      for(const id in remotes){ const m=remotes[id].mesh; a.push({id,x:m.position.x,z:m.position.z,local:false}); }
+      return a;
+    },
+    randomPlayer(){ const a=out.allPlayers(); return a[Math.floor(Math.random()*a.length)]; },
+    nextZid(){ return zid++; },
+    ev(type,...args){ if(!joined||!isHost) return; evList.push({t:Date.now(),a:[++evSeq,type,...args]}); },
+    prefix(){ return joined?('Room: '+room+' · '+Object.keys(players).length+' online\n'):''; },
+    addPlant(k,x,z){
+      if(!joined){ addPlantLocal('l'+(++plantSeq),k,x,z,myId); return; }
+      base.child('plants').push().set({k,x:r2(x),z:r2(z),o:myId}).catch(e=>toast('Could not place: '+(e&&e.code||'error')));
+    },
+    delPlant(p){
+      const id=p.id; removePlant(p);
+      if(joined) base.child('plants/'+id).remove().catch(()=>{});
+    },
+    join(name,roomCode){
+      if(!window.firebase){ toast('Firebase failed to load — playing solo'); return false; }
+      try{ if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG); db=firebase.database(); }
+      catch(e){ console.warn(e); toast('Could not start multiplayer — playing solo'); return false; }
+      room=(roomCode||'main').replace(/[^A-Za-z0-9_-]/g,'').slice(0,24)||'main';
+      const myName=(name||'Gardener').slice(0,16);
+      myId=Math.random().toString(36).slice(2,8);
+      base=db.ref('rooms/'+room); me=base.child('players/'+myId);
+      joined=true; isHost=false; hostId=null;
+      clearZombies(); placed.slice().forEach(removePlant);
+      const fail=e=>{ console.warn(e); toast('Database error: '+(e&&e.code||e)); };
+      db.ref('.info/connected').on('value',s=>{
+        if(s.val()===true){
+          me.onDisconnect().remove();
+          me.set({n:myName,x:r2(player.position.x),z:r2(player.position.z),r:0,m:0,j:firebase.database.ServerValue.TIMESTAMP}).catch(fail);
+        }
+      });
+      base.child('players').on('child_added',s=>{ players[s.key]=s.val(); onPlayers(); },fail);
+      base.child('players').on('child_changed',s=>{ players[s.key]=s.val(); onPlayers(); },fail);
+      base.child('players').on('child_removed',s=>{ delete players[s.key]; removeRemote(s.key); onPlayers(); },fail);
+      base.child('plants').on('child_added',s=>{ const v=s.val(); if(v && !findPlant(s.key)) addPlantLocal(s.key,v.k,v.x,v.z,v.o); },fail);
+      base.child('plants').on('child_removed',s=>{ const p=findPlant(s.key); if(p) removePlant(p); },fail);
+      base.child('world').on('value',s=>{ const v=s.val(); if(typeof v==='string' && !isHost) applyWorld(v); },fail);
+      toast('Joined room "'+room+'"');
+      return true;
+    },
+    tick(dt){
+      // other players: smooth movement + leg swing
+      for(const id in remotes){
+        const r=remotes[id], m=r.mesh, k=1-Math.exp(-dt*10), ox=m.position.x, oz=m.position.z;
+        m.position.x+=(r.tx-ox)*k; m.position.z+=(r.tz-oz)*k; m.rotation.y=turn(m.rotation.y,r.tr,dt*10);
+        const sp=Math.hypot(m.position.x-ox,m.position.z-oz)/Math.max(dt,1e-3);
+        const dv=m.userData.dave;
+        if(sp>.5){ r.ph+=dt*12; if(dv) poseDave(m,r.ph,1); else { r.legs[0].rotation.x=Math.sin(r.ph)*.7; r.legs[1].rotation.x=-Math.sin(r.ph)*.7; } m.position.y=Math.abs(Math.sin(r.ph))*.06; }
+        else { if(dv) poseDave(m,0,0); else r.legs[0].rotation.x=r.legs[1].rotation.x=0; m.position.y=0; }
+      }
+      if(!joined) return;
+      // my position -> database (only when it changed, plus a heartbeat)
+      posTimer-=dt; hbTimer+=dt;
+      if(posTimer<=0){
+        posTimer=0.1;
+        const x=r2(player.position.x), z=r2(player.position.z), r=r2(player.rotation.y);
+        if(x!==lastX||z!==lastZ||r!==lastR||hbTimer>3){
+          hbTimer=0; me.update({x,z,r,m:(x!==lastX||z!==lastZ)?1:0}).catch(()=>{});
+          lastX=x; lastZ=z; lastR=r;
+        }
+      }
+      if(isHost){
+        snapTimer-=dt;
+        if(snapTimer<=0){ snapTimer=0.125; publish(); }
+      } else {
+        // follow the host: zombies glide to their last known spot, plants squash on cue
+        const k=1-Math.exp(-dt*14);
+        for(const z of zombies){
+          if(z.tx===undefined) continue;
+          const p=z.mesh.position; p.x+=(z.tx-p.x)*k; p.z+=(z.tz-p.z)*k;
+          z.mesh.rotation.y=turn(z.mesh.rotation.y,z.try,dt*10);
+          const f=z.flags||0;
+          if(f&2){ z.squashed=true; z.mesh.scale.set(1.25,0.1,1.25); }
+          else gaitBody(z,dt,(f&1)?'eat':'walk');
+          if((f&1) && z.tp===myId && invuln<=0 && !adminGod){ playerHp-=z.dmg*0.8*dt; sinceHit=0; }
+        }
+        for(const p of placed){
+          if(!p.pt) continue; const a=p.pt, m=p.mesh;
+          m.position.x+=(a[1]-m.position.x)*k; m.position.y+=(a[2]-m.position.y)*k; m.position.z+=(a[3]-m.position.z)*k;
+          m.scale.x+=(a[4]-m.scale.x)*k; m.scale.y+=(a[5]-m.scale.y)*k; m.scale.z+=(a[6]-m.scale.z)*k;
+        }
+      }
+    }
+  };
+  return out;
+})();
+
+// ---------- join screen ----------
+(function(){
+  const $=id=>document.getElementById(id);
+  let saved=''; try{ saved=localStorage.getItem('garden_name')||''; }catch(e){}
+  const q=new URLSearchParams(location.search).get('room');
+  $('jName').value=saved; $('jRoom').value=(q||'main').replace(/[^A-Za-z0-9_-]/g,'').slice(0,24)||'main';
+  function go(solo){
+    const name=($('jName').value.trim()||('Gardener'+Math.floor(Math.random()*90+10))).slice(0,16);
+    try{ localStorage.setItem('garden_name',name); }catch(e){}
+    $('join').style.display='none';
+    if(!solo) net.join(name,$('jRoom').value.trim());
+    if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  }
+  $('jGo').onclick=()=>go(false);
+  $('jSolo').onclick=()=>go(true);
+  for(const id of ['jName','jRoom']) $(id).addEventListener('keydown',e=>{ if(e.key==='Enter') go(false); });
+})();
+
+renderUI();
+spawnSun(-2,2,6); spawnSun(3,-3,9);
+frame();
+try { loadModels(); } catch(e) { console.warn(e); }
+</script>
+</body>
+</html>
